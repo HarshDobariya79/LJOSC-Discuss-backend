@@ -1,0 +1,27 @@
+{
+  "name": "ljosc-discuss",
+  "version": "1.0.0",
+  "description": "A community discussion forum",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/harshdobariya79/LJOSC-Discuss.git"
+  },
+  "author": "Harsh Dobariya (http://github.com/harshdobariya79)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/harshdobariya79/LJOSC-Discuss/issues"
+  },
+  "homepage": "https://github.com/harshdobariya79/LJOSC-Discuss#readme",
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.5.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.3.1",
+    "nodemon": "^3.0.1"
+  }
+}
