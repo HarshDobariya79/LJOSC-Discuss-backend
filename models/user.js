@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema({
   createdTimestamp: { type: Number, default: Math.floor(Date.now() / 1000) },
   lastVisitDate: { type: String, default: null },
   visitedDays: { type: Number, default: 0},
-  threadsViewed: { type: [], default: []},
+  visitedThreads: { type: [], default: []},
 });
 
 module.exports = mongoose.model("User", userSchema);
