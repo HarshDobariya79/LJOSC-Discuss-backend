@@ -19,8 +19,6 @@ services:
       context: .
       dockerfile: mongodb.Dockerfile
     container_name: mongodb
-    ports:
-      - "27017:27017"
     networks:
       - net1
     environment:
