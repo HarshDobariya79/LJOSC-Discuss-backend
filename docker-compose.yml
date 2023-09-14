@@ -1,0 +1,31 @@
+version: '3'
+services:
+  node-app:
+    build:
+      context: .
+      dockerfile: node.Dockerfile
+    container_name: node-app
+    ports:
+      - "3000:3000"
+    networks:
+      - net1
+    depends_on:
+      - mongodb
+    env_file:
+    - .env
+
+  mongodb:
+    build:
+      context: .
+      dockerfile: mongodb.Dockerfile
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    networks:
+      - net1
+    environment:
+      - MONGO_INITDB_DATABASE=ljosc
+
+networks:
+  mynetwork:
+    driver: bridge
