@@ -27,5 +27,5 @@ services:
       - MONGO_INITDB_DATABASE=ljosc
 
 networks:
-  mynetwork:
+  net1:
     driver: bridge
