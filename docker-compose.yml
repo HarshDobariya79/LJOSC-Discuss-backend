@@ -6,7 +6,7 @@ services:
       dockerfile: node.Dockerfile
     container_name: node-app
     ports:
-      - "3000:3000"
+      - "${SERVER_PORT:-5050}:${SERVER_PORT:-5050}"
     networks:
       - net1
     depends_on:
