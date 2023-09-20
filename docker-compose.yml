@@ -4,6 +4,7 @@ services:
     build:
       context: .
       dockerfile: node.Dockerfile
+    restart: unless-stopped
     container_name: node-app
     ports:
       - "${SERVER_PORT:-5050}:${SERVER_PORT:-5050}"
@@ -18,6 +19,7 @@ services:
     build:
       context: .
       dockerfile: mongodb.Dockerfile
+    restart: unless-stopped
     container_name: mongodb
     networks:
       - net1
