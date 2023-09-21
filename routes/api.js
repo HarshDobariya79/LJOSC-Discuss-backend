@@ -58,14 +58,14 @@ router.get("/v1/thread/:id", async (req, res) => {
         },
       },
       {
-        $unwind: '$authorData',
+        $unwind: "$authorData",
       },
       {
-        $unwind: '$authorDetails',
+        $unwind: "$authorDetails",
       },
       {
         $addFields: {
-          views: { $objectToArray: '$views' },
+          views: { $objectToArray: "$views" },
         },
       },
       {
@@ -74,13 +74,13 @@ router.get("/v1/thread/:id", async (req, res) => {
           content: 1,
           createDate: 1,
           views: {
-            $sum: '$views.v',
+            $sum: "$views.v",
           },
           reach: {
-            $size: '$reach',
+            $size: "$reach",
           },
           likes: {
-            $size: '$likes',
+            $size: "$likes",
           },
           author: {
             _id: "$authorData._id",
@@ -91,14 +91,14 @@ router.get("/v1/thread/:id", async (req, res) => {
               input: "$replies",
               as: "reply",
               in: {
-                author:{
+                author: {
                   _id: "$$reply.author",
                   username: "$authorDetails.username",
                 },
                 content: "$$reply.content",
-                date: "$$reply.date"
-              }
-            }
+                date: "$$reply.date",
+              },
+            },
           },
         },
       },
@@ -108,29 +108,35 @@ router.get("/v1/thread/:id", async (req, res) => {
     const transformedThread = result[0];
 
     if (transformedThread) {
+      response = {
+        ...transformedThread,
+        createDate: formatDateTime(transformedThread.createDate),
+        replies: transformedThread.replies.map((reply) => {
+          return {
+            ...reply,
+            date: formatDateTime(reply.date),
+          };
+        }),
+      };
 
-      response = {...transformedThread, createDate: formatDateTime(transformedThread.createDate), replies: transformedThread.replies.map((reply) => {
-        return {
-          ...reply,
-          date: formatDateTime(reply.date),
-        }
-      })}
-
-      const trackRecord = await Thread.findByIdAndUpdate(req.params.id, {
-        $addToSet: {
-          'reach': user._id,
+      const trackRecord = await Thread.findByIdAndUpdate(
+        req.params.id,
+        {
+          $addToSet: {
+            reach: user._id,
+          },
+          $inc: {
+            [`views.${today}`]: 1,
+          },
         },
-        $inc: {
-          [`views.${today}`]: 1,
-        }
-      },
-      { new: true})
+        { new: true }
+      );
 
       const userRecordUpdate = await User.findByIdAndUpdate(user._id, {
         $addToSet: {
           visitedThreads: req.params.id,
-        }
-      })
+        },
+      });
 
       res.status(200).send(response);
     } else {
@@ -223,7 +229,7 @@ router.get("/v1/thread", async (req, res) => {
 });
 
 // reply on a thread
-router.post('/v1/thread/reply', async (req, res) => {
+router.post("/v1/thread/reply", async (req, res) => {
   try {
     const user = req.user;
     const { threadId, content } = req.body;
@@ -231,10 +237,12 @@ router.post('/v1/thread/reply', async (req, res) => {
     const result = await Thread.findByIdAndUpdate(
       threadId,
       {
-        $push: { replies: {
-          author: user._id,
-          content: content
-        } },
+        $push: {
+          replies: {
+            author: user._id,
+            content: content,
+          },
+        },
       },
       { new: true }
     );
@@ -242,7 +250,44 @@ router.post('/v1/thread/reply', async (req, res) => {
     res.status(201).send(result);
   } catch (err) {
     console.error(err);
+    res.status(500).send({ message: "Something went wrong" });
   }
-})
+});
+
+// like a thread
+router.post("/v1/thread/like", async (req, res) => {
+  try {
+    const user = req.user;
+    const { threadId, like = true } = req.body;
+
+    if (threadId === undefined) {
+      res.status(400).send({ message: "Invalid threadId" });
+    }
+
+    const response = await Thread.findByIdAndUpdate(
+      threadId,
+      like
+        ? {
+            $addToSet: {
+              likes: user._id,
+            },
+          }
+        : {
+            $pull: {
+              likes: user._id,
+            },
+          }
+    );
+
+    console.log(response);
+
+    res
+      .status(201)
+      .send(like ? "Liked successfully" : "Removed like successfully");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Something went wrong" });
+  }
+});
 
 module.exports = router;
