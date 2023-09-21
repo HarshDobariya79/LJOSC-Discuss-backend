@@ -6,6 +6,7 @@ const jwt = require("jsonwebtoken");
 
 const ACCESS_TOKEN_SIGN_KEY = process.env.ACCESS_TOKEN_SIGN_KEY;
 const REFRESH_TOKEN_SIGN_KEY = process.env.REFRESH_TOKEN_SIGN_KEY;
+const REFRESH_TOKEN_CLOCK_TOLERANCE = 5000; // 5 seconds
 
 router.post("/v1/signup", async (req, res) => {
   try {
@@ -68,6 +69,10 @@ router.post("/v1/refresh-token", (req, res) => {
 
   try {
     const decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SIGN_KEY);
+
+    if (decoded.exp <= Date.now() / REFRESH_TOKEN_CLOCK_TOLERANCE) {
+      return res.status(401).json({ error: 'Refresh token has expired' });
+    }
 
     const accessToken = jwt.sign(
       { userId: decoded.userId, email: decoded.email },
