@@ -190,7 +190,7 @@ router.get("/v1/thread", async (req, res) => {
           },
           reach: { $size: "$reach" },
           likes: { $size: "$likes" },
-          repliesCount: { $size: "$replies" },
+          replies: { $size: "$replies" },
         },
       },
       {
@@ -204,7 +204,7 @@ router.get("/v1/thread", async (req, res) => {
           views: 1,
           reach: 1,
           likes: 1,
-          repliesCount: 1,
+          replies: 1,
           createDate: {
             $ifNull: ["$createDate", new Date()],
           },
