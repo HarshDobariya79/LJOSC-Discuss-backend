@@ -1,13 +1,24 @@
 const mongoose = require("mongoose");
 
 const threadSchema = new mongoose.Schema({
-  authorId: { type: String, required: true },
-  createDate: { type: Date},
-  title: { type: String, required: true},
-  content: { type: String, required: true },
-  views: { type: Object, default: {} },
-  viewCount: { type: Number, default: 0 },
-  reach: { type: Number, default: 0 },
+  title: {type: String, required: true},
+  content: {type: String, required: true},
+  createDate: { type: Date, default: Date.now },
+  author: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  views: {
+    type: Map,
+    of: Number,
+    default: {},
+  },
+  reach: [{ type: mongoose.Types.ObjectId, ref: 'User' }],
+  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  replies: [
+    {
+      content: String,
+      author: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      date: { type: Date, default: Date.now },
+    },
+  ],
 });
 
 module.exports = mongoose.model("Thread", threadSchema);
