@@ -1,116 +1,248 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const Thread = require("../models/thread");
 const User = require("../models/user");
-const { formatDate } = require("../utils");
+const { formatDate, formatDateTime } = require("../utils");
 
+// create a new thread
 router.post("/v1/thread", async (req, res) => {
-  const currentDate = new Date();
   try {
-    const { title, data } = req.body;
+    const { title, content } = req.body;
     const user = req.user;
 
     const thread = new Thread({
-      authorId: user._id,
       title: title,
-      content: data,
-      createDate: currentDate,
+      content: content,
+      author: user._id,
     });
     const result = await thread.save();
-    result.createDate = await formatDate(result.createDate);
+    const response = {
+      ...result.toObject(),
+      createDate: formatDateTime(result.createDate),
+    };
 
-    res.status(201).send(result);
+    res.status(201).send(response);
   } catch (err) {
     res.status(500).send({ message: "Something went wrong" });
   }
 });
 
+// get a thread
 router.get("/v1/thread/:id", async (req, res) => {
   try {
     const user = req.user;
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    const thread = await Thread.findOne(
-      { _id: req.params.id },
-      { _id: 1, title: 1, authorId: 1, createDate: 1, views: 1 }
-    );
-
-    const todayISO = today.toISOString().split("T")[0];
-    const _ = await Thread.findOneAndUpdate(
-      { _id: req.params.id },
+    const pipeline = [
       {
-        $push: {
-          [`views.${todayISO}`]: user._id.toString(),
+        $match: {
+          _id: new mongoose.Types.ObjectId(req.params.id),
         },
       },
       {
-        upsert: true,
-      }
+        $lookup: {
+          from: "users",
+          localField: "author",
+          foreignField: "_id",
+          as: "authorData",
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "replies.author",
+          foreignField: "_id",
+          as: "authorDetails",
+        },
+      },
+      {
+        $unwind: '$authorData',
+      },
+      {
+        $unwind: '$authorDetails',
+      },
+      {
+        $addFields: {
+          views: { $objectToArray: '$views' },
+        },
+      },
+      {
+        $project: {
+          title: 1,
+          content: 1,
+          createDate: 1,
+          views: {
+            $sum: '$views.v',
+          },
+          reach: {
+            $size: '$reach',
+          },
+          likes: {
+            $size: '$likes',
+          },
+          author: {
+            _id: "$authorData._id",
+            username: "$authorData.username",
+          },
+          replies: {
+            $map: {
+              input: "$replies",
+              as: "reply",
+              in: {
+                author:{
+                  _id: "$$reply.author",
+                  username: "$authorDetails.username",
+                },
+                content: "$$reply.content",
+                date: "$$reply.date"
+              }
+            }
+          },
+        },
+      },
+    ];
+
+    const result = await Thread.aggregate(pipeline);
+    const transformedThread = result[0];
+
+    if (transformedThread) {
+
+      response = {...transformedThread, createDate: formatDateTime(transformedThread.createDate), replies: transformedThread.replies.map((reply) => {
+        return {
+          ...reply,
+          date: formatDateTime(reply.date),
+        }
+      })}
+
+      const trackRecord = await Thread.findByIdAndUpdate(req.params.id, {
+        $addToSet: {
+          'reach': user._id,
+        },
+        $inc: {
+          [`views.${today}`]: 1,
+        }
+      },
+      { new: true})
+
+      const userRecordUpdate = await User.findByIdAndUpdate(user._id, {
+        $addToSet: {
+          visitedThreads: req.params.id,
+        }
+      })
+
+      res.status(200).send(response);
+    } else {
+      console.log("Thread not found.");
+      res.status(404).send({ message: "Thread not found!" });
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(500).send({ message: "Something went wrong" });
+  }
+});
+
+// get a list of threads
+router.get("/v1/thread", async (req, res) => {
+  try {
+    const { page = 1, limit = 15, recent } = req.query;
+    const skip = (page - 1) * limit;
+    if (recent) {
+      var filterDate = new Date();
+      filterDate.setDate(filterDate.getDate());
+      filterDate.setHours(0, 0, 0, 0);
+    } else {
+      filterDate = undefined;
+    }
+
+    const pipeline = [
+      {
+        $match: {
+          createDate: { $gte: new Date(filterDate) },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "author",
+          foreignField: "_id",
+          as: "authorData",
+        },
+      },
+      {
+        $addFields: {
+          authorData: {
+            $arrayElemAt: ["$authorData", 0],
+          },
+          views: {
+            $cond: [
+              { $ifNull: ["$views", false] },
+              { $size: { $objectToArray: "$views" } },
+              0,
+            ],
+          },
+          reach: { $size: "$reach" },
+          likes: { $size: "$likes" },
+          repliesCount: { $size: "$replies" },
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          title: 1,
+          author: {
+            _id: "$authorData._id",
+            username: "$authorData.username",
+          },
+          views: 1,
+          reach: 1,
+          likes: 1,
+          repliesCount: 1,
+          createDate: {
+            $ifNull: ["$createDate", new Date()],
+          },
+        },
+      },
+      { $skip: skip },
+      { $limit: parseInt(limit) },
+    ];
+
+    const threads = await Thread.aggregate(pipeline);
+    const response = threads.map((thread) => {
+      return {
+        ...thread,
+        createDate: formatDateTime(thread.createDate),
+      };
+    });
+    res.status(200).send(response);
+  } catch (err) {
+    console.log(err);
+    res.status(500).send({ message: "Something went wrong" });
+  }
+});
+
+// reply on a thread
+router.post('/v1/thread/reply', async (req, res) => {
+  try {
+    const user = req.user;
+    const { threadId, content } = req.body;
+
+    const result = await Thread.findByIdAndUpdate(
+      threadId,
+      {
+        $push: { replies: {
+          author: user._id,
+          content: content
+        } },
+      },
+      { new: true }
     );
-
-    let reach = new Set();
-    let viewCount = 0;
-    for (const [key, value] of Object.entries(thread.views)) {
-      viewCount += value.length;
-      const idSet = new Set(value);
-      reach = new Set([...reach, ...idSet]);
-    }
-    thread.reach = reach.size;
-    thread.viewCount = viewCount;
-    thread.save();
-
-    const result = { ...thread.toObject(), views: reach.size };
-    result.createDate = await formatDate(thread.createDate);
-    const author = await User.findOne({ _id: result.authorId });
-    result.author = author.username;
-    delete result?.authorId;
-
-    if (!user.visitedThreads.includes(req.params.id)) {
-      user.visitedThreads.push(req.params.id);
-      user.save();
-    }
 
     res.status(201).send(result);
   } catch (err) {
-    console.log(err);
-    res.status(500).send({ message: "Something went wrong" });
+    console.error(err);
   }
-});
-
-router.get("/v1/thread", async (req, res) => {
-  try {
-    const user = req.user;
-
-    const threads = await Thread.find(
-      {},
-      {
-        _id: 1,
-        title: 1,
-        authorId: 1,
-        createDate: 1,
-        views: 1,
-        reach: 1,
-        viewCount: 1,
-      }
-    );
-    const result = await Promise.all(
-      threads.map(async (thread) => {
-        const obj = {
-          ...thread.toObject(),
-          createDate: formatDate(thread.createDate),
-          views: thread.views.length,
-        };
-        const author = await User.findOne({ _id: obj.authorId });
-        obj.author = author.username;
-        delete obj.authorId;
-        return obj;
-      })
-    );
-    res.status(200).send(result);
-  } catch (err) {
-    console.log(err);
-    res.status(500).send({ message: "Something went wrong" });
-  }
-});
+})
 
 module.exports = router;
