@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { formatDate } = require("../utils");
+const User = require("../models/user");
 
 router.get("/", async (req, res) => {
   res.send({ message: "Home page" });
@@ -8,13 +9,15 @@ router.get("/", async (req, res) => {
 
 router.get("/ping", async (req, res) => {
   const currentDate = new Date();
+  currentDate.setHours(0, 0, 0, 0);
   try {
     const user = req.user;
     if (currentDate != user.lastVisitDate) {
-      user.lastVisitDate = currentDate;
-      user.visitedDays += 1;
+      const response = await User.findByIdAndUpdate(user._id, {
+        $set: { lastVisitDate: currentDate },
+        $inc: { visitedDays: 1 },
+      });
     }
-    user.save();
     res.status(200).send({ message: "Success", data: formatDate(currentDate) });
   } catch (err) {
     console.log(err);
