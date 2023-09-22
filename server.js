@@ -17,7 +17,14 @@ db.on("error", (err) => console.error(err));
 db.once("open", () => console.log("connected to Database"));
 
 app.use(express.json());
-app.use(cors());
+
+const corsOptions = {
+  origin: '*',
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 
 app.use("/auth", authRouter);
 app.use("/", authMiddleware);
