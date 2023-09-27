@@ -22,8 +22,12 @@ router.post("/v1/signup", async (req, res) => {
     await user.save();
     res.status(201).json({ message: "User registered successfully" });
   } catch (error) {
-    console.error('Signup: ', error);
-    res.status(500).json({ error: "Registration failed" });
+    console.log('Signup: ', error);
+    if (error.name === "MongoServerError") {
+      res.status(500).json({message: "Email already registered!"})
+    }else {
+      res.status(500).json({ message: "Registration failed" });
+    }
   }
 });
 
