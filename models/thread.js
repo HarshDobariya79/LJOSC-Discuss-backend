@@ -19,6 +19,6 @@ const threadSchema = new mongoose.Schema({
       date: { type: Date, default: Date.now },
     },
   ],
-});
+}, { autoIndex: false });
 
 module.exports = mongoose.model("Thread", threadSchema);
