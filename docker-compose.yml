@@ -25,7 +25,12 @@ services:
       - net1
     environment:
       - MONGO_INITDB_DATABASE=ljosc
+    volumes:
+      - mongodb_data:/data/db
 
 networks:
   net1:
     driver: bridge
+
+volumes:
+  mongodb_data:
