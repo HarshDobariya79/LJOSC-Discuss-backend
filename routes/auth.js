@@ -58,8 +58,15 @@ router.post("/v1/login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.status(200).json({ accessToken, refreshToken });
+    const userData = {
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+    }
+
+    res.status(200).json({ accessToken, refreshToken, user: userData });
   } catch (error) {
+    console.log(error);
     res.status(500).json({ error: "Authentication failed" });
   }
 });
