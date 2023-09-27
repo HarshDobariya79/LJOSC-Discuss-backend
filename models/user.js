@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema({
   lastVisitDate: { type: String, default: null },
   visitedDays: { type: Number, default: 0},
   visitedThreads: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Thread' }], default: []},
+  likesReceived: { type: Number, default: 0 },
 });
 
 module.exports = mongoose.model("User", userSchema);
