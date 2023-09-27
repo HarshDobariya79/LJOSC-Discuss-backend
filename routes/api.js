@@ -279,7 +279,17 @@ router.post("/v1/thread/like", async (req, res) => {
           }
     );
 
-    console.log(response);
+    const oldRecordStatus = response.likes.indexOf(user._id) !== -1;
+
+    if (like === true && !oldRecordStatus) {
+      await User.findByIdAndUpdate(response.author, {
+        $inc: { likesReceived: 1 },
+      });
+    } else if (like === false && oldRecordStatus) {
+      await User.findByIdAndUpdate(response.author, {
+        $inc: { likesReceived: -1 },
+      });
+    }
 
     res
       .status(201)
