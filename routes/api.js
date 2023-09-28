@@ -136,7 +136,7 @@ router.get("/v1/thread/:id", async (req, res) => {
                   username: "$$reply.author.username", // Access username field within author
                 },
                 content: "$$reply.content",
-                date: "$$reply.date"
+                date: "$$reply.date",
                 // Add other fields from the reply object as needed
               },
             },
@@ -358,6 +358,20 @@ router.post("/v1/thread/like", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).send({ message: "Something went wrong" });
+  }
+});
+
+// Top contributors api
+router.get("/v1/users/top", async (req, res) => {
+  try {
+    const users = await User.find({}, "_id username likesReceived").sort({
+      likesReceived: -1,
+    });
+
+    res.status(200).send(users);
+  } catch (err) {
+    res.status(500).send({ message: "Something went wrong" });
+    console.log("top contributors", err);
   }
 });
 
