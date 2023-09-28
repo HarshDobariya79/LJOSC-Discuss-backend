@@ -12,6 +12,7 @@ services:
       - net1
     depends_on:
       - mongodb
+      - redis
     env_file:
     - .env
 
@@ -28,9 +29,21 @@ services:
     volumes:
       - mongodb_data:/data/db
 
+  redis:
+    build:
+      context: .
+      dockerfile: redis.Dockerfile
+    restart: unless-stopped
+    container_name: redis
+    networks:
+      - net1
+    volumes:
+      - redis_data:/data/db
+
 networks:
   net1:
     driver: bridge
 
 volumes:
   mongodb_data:
+  redis_data:
