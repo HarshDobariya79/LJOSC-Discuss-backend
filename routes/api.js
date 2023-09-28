@@ -60,12 +60,51 @@ router.get("/v1/thread/:id", async (req, res) => {
       {
         $unwind: "$authorData",
       },
-      {
-        $unwind: "$authorDetails",
-      },
+      // {
+      //   $unwind: {
+      //     path: "$authorDetails",
+      //     preserveNullAndEmptyArrays: true,
+      //   },
+      // },
       {
         $addFields: {
           views: { $objectToArray: "$views" },
+          liked: {
+            $in: [new mongoose.Types.ObjectId(user._id), "$likes"],
+          },
+          replies: {
+            $map: {
+              input: {
+                $cond: [
+                  { $isArray: "$replies" },
+                  "$replies",
+                  [], // Handle empty replies array
+                ],
+              },
+              as: "reply",
+              in: {
+                author: {
+                  $let: {
+                    vars: { authorId: "$$reply.author" },
+                    in: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: "$authorDetails",
+                            as: "authorDetail",
+                            cond: { $eq: ["$$authorDetail._id", "$$authorId"] },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                  },
+                },
+                content: "$$reply.content",
+                date: "$$reply.date",
+              },
+            },
+          },
         },
       },
       {
@@ -82,21 +121,23 @@ router.get("/v1/thread/:id", async (req, res) => {
           likes: {
             $size: "$likes",
           },
+          liked: 1,
           author: {
             _id: "$authorData._id",
             username: "$authorData.username",
           },
           replies: {
             $map: {
-              input: "$replies",
+              input: "$replies", // Assuming 'replies' is the field containing the list of replies
               as: "reply",
               in: {
                 author: {
-                  _id: "$$reply.author",
-                  username: "$authorDetails.username",
+                  _id: "$$reply.author._id", // Access _id field within author
+                  username: "$$reply.author.username", // Access username field within author
                 },
                 content: "$$reply.content",
-                date: "$$reply.date",
+                date: "$$reply.date"
+                // Add other fields from the reply object as needed
               },
             },
           },
