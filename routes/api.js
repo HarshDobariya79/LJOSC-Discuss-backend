@@ -152,21 +152,48 @@ router.get("/v1/thread/:id", async (req, res) => {
 // get a list of threads
 router.get("/v1/thread", async (req, res) => {
   try {
-    const { page = 1, limit = 15, recent } = req.query;
+    const { page = 1, limit = 15, filter = "all" } = req.query;
+    if (!["all", "top", "unseen"].includes(filter)) {
+      res.status(400).send({ message: "Invalid filter" });
+      return;
+    }
     const skip = (page - 1) * limit;
-    if (recent) {
-      var filterDate = new Date();
-      filterDate.setDate(filterDate.getDate());
-      filterDate.setHours(0, 0, 0, 0);
-    } else {
-      filterDate = undefined;
+    let sortObject = { createDate: -1 };
+    let additionalFilter = [];
+
+    if (filter === "top") {
+      sortObject = { likes: -1, createDate: -1 };
+    } else if (filter === "unseen") {
+      additionalFilter = [
+        {
+          $match: {
+            _id: { $nin: req.user.visitedThreads },
+          },
+        },
+      ];
     }
 
-    const pipeline = [
+    // if (filter) {
+    //   var filterDate = new Date();
+    //   filterDate.setHours(0, 0, 0, 0);
+    // } else {
+    //   filterDate = undefined;
+    // }
+    const pipeline = additionalFilter.concat([
+      // {
+      //   $match: {
+      //     createDate: { $gte: new Date(filterDate) },
+      //   },
+      // },
       {
-        $match: {
-          createDate: { $gte: new Date(filterDate) },
+        $addFields: {
+          reach: { $size: "$reach" },
+          likes: { $size: "$likes" },
+          replies: { $size: "$replies" },
         },
+      },
+      {
+        $sort: sortObject,
       },
       {
         $lookup: {
@@ -181,16 +208,7 @@ router.get("/v1/thread", async (req, res) => {
           authorData: {
             $arrayElemAt: ["$authorData", 0],
           },
-          views: {
-            $cond: [
-              { $ifNull: ["$views", false] },
-              { $size: { $objectToArray: "$views" } },
-              0,
-            ],
-          },
-          reach: { $size: "$reach" },
-          likes: { $size: "$likes" },
-          replies: { $size: "$replies" },
+          views: { $objectToArray: "$views" },
         },
       },
       {
@@ -201,7 +219,9 @@ router.get("/v1/thread", async (req, res) => {
             _id: "$authorData._id",
             username: "$authorData.username",
           },
-          views: 1,
+          views: {
+            $sum: "$views.v",
+          },
           reach: 1,
           likes: 1,
           replies: 1,
@@ -212,7 +232,7 @@ router.get("/v1/thread", async (req, res) => {
       },
       { $skip: skip },
       { $limit: parseInt(limit) },
-    ];
+    ]);
 
     const threads = await Thread.aggregate(pipeline);
     const response = threads.map((thread) => {
