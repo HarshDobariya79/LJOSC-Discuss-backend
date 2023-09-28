@@ -3,7 +3,8 @@ const router = express.Router();
 const mongoose = require("mongoose");
 const Thread = require("../models/thread");
 const User = require("../models/user");
-const { formatDate, formatDateTime } = require("../utils");
+const redis = require("../services/redis");
+const { formatDate, formatDateTime } = require("../utils/helpers");
 
 // create a new thread
 router.post("/v1/thread", async (req, res) => {
@@ -22,6 +23,27 @@ router.post("/v1/thread", async (req, res) => {
       createDate: formatDateTime(result.createDate),
     };
 
+    // delete all cached threads lists
+
+    let cursor = "0";
+    let keysToDelete = [];
+
+    do {
+      const [newCursor, scannedKeys] = await redis.scan(cursor, "MATCH", "threads?*");
+      cursor = newCursor;
+      keysToDelete.push(...scannedKeys);
+    } while (cursor !== "0");
+
+    if (keysToDelete.length > 0) {
+      // Use a pipeline to efficiently delete the keys
+      const pipeline = redis.pipeline();
+      keysToDelete.forEach((key) => pipeline.del(key));
+      await pipeline.exec();
+      // console.log(`Deleted ${keysToDelete.length} keys.`);
+    } else {
+      // console.log(`No keys matched the prefix "${prefix}".`);
+    }
+
     res.status(201).send(response);
   } catch (err) {
     res.status(500).send({ message: "Something went wrong" });
@@ -31,6 +53,7 @@ router.post("/v1/thread", async (req, res) => {
 // get a thread
 router.get("/v1/thread/:id", async (req, res) => {
   try {
+    const { id } = req.params;
     const user = req.user;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -38,7 +61,7 @@ router.get("/v1/thread/:id", async (req, res) => {
     const pipeline = [
       {
         $match: {
-          _id: new mongoose.Types.ObjectId(req.params.id),
+          _id: new mongoose.Types.ObjectId(id),
         },
       },
       {
@@ -145,45 +168,52 @@ router.get("/v1/thread/:id", async (req, res) => {
       },
     ];
 
-    const result = await Thread.aggregate(pipeline);
-    const transformedThread = result[0];
+    const cachedData = await redis.get(`thread?id=${id}`);
 
-    if (transformedThread) {
-      response = {
-        ...transformedThread,
-        createDate: formatDateTime(transformedThread.createDate),
-        replies: transformedThread.replies.map((reply) => {
-          return {
-            ...reply,
-            date: formatDateTime(reply.date),
-          };
-        }),
-      };
-
-      const trackRecord = await Thread.findByIdAndUpdate(
-        req.params.id,
-        {
-          $addToSet: {
-            reach: user._id,
-          },
-          $inc: {
-            [`views.${today}`]: 1,
-          },
-        },
-        { new: true }
-      );
-
-      const userRecordUpdate = await User.findByIdAndUpdate(user._id, {
-        $addToSet: {
-          visitedThreads: req.params.id,
-        },
-      });
-
-      res.status(200).send(response);
+    if (cachedData) {
+      const data = JSON.parse(cachedData);
+      res.status(200).send(data);
     } else {
-      console.log("Thread not found.");
-      res.status(404).send({ message: "Thread not found!" });
+      const result = await Thread.aggregate(pipeline);
+      const transformedThread = result[0];
+
+      if (transformedThread) {
+        response = {
+          ...transformedThread,
+          createDate: formatDateTime(transformedThread.createDate),
+          replies: transformedThread.replies.map((reply) => {
+            return {
+              ...reply,
+              date: formatDateTime(reply.date),
+            };
+          }),
+        };
+        res.status(200).send(response);
+        await redis.set(`thread?id=${id}`, JSON.stringify(response));
+      } else {
+        console.log("Thread not found.");
+        res.status(404).send({ message: "Thread not found!" });
+        return;
+      }
     }
+    const trackRecord = await Thread.findByIdAndUpdate(
+      req.params.id,
+      {
+        $addToSet: {
+          reach: user._id,
+        },
+        $inc: {
+          [`views.${today}`]: 1,
+        },
+      },
+      { new: true }
+    );
+
+    const userRecordUpdate = await User.findByIdAndUpdate(user._id, {
+      $addToSet: {
+        visitedThreads: req.params.id,
+      },
+    });
   } catch (err) {
     console.log(err);
     res.status(500).send({ message: "Something went wrong" });
@@ -275,14 +305,28 @@ router.get("/v1/thread", async (req, res) => {
       { $limit: parseInt(limit) },
     ]);
 
-    const threads = await Thread.aggregate(pipeline);
-    const response = threads.map((thread) => {
-      return {
-        ...thread,
-        createDate: formatDateTime(thread.createDate),
-      };
-    });
-    res.status(200).send(response);
+    const cachedData = await redis.get(
+      `threads?page=${page}&limit=${limit}&filter=${filter}`
+    );
+
+    if (cachedData) {
+      const data = JSON.parse(cachedData);
+      res.status(200).send(data);
+    } else {
+      const threads = await Thread.aggregate(pipeline);
+      const data = threads.map((thread) => {
+        return {
+          ...thread,
+          createDate: formatDateTime(thread.createDate),
+        };
+      });
+      res.status(200).send(data);
+      await redis.setex(
+        `threads?page=${page}&limit=${limit}&filter=${filter}`,
+        10,
+        JSON.stringify(data)
+      );
+    }
   } catch (err) {
     console.log(err);
     res.status(500).send({ message: "Something went wrong" });
@@ -294,6 +338,8 @@ router.post("/v1/thread/reply", async (req, res) => {
   try {
     const user = req.user;
     const { threadId, content } = req.body;
+
+    await redis.del(`thread?id=${threadId}`);
 
     const result = await Thread.findByIdAndUpdate(
       threadId,
@@ -320,6 +366,8 @@ router.post("/v1/thread/like", async (req, res) => {
   try {
     const user = req.user;
     const { threadId, like = true } = req.body;
+
+    await redis.del(`thread?id=${threadId}`);
 
     if (threadId === undefined) {
       res.status(400).send({ message: "Invalid threadId" });
@@ -364,11 +412,18 @@ router.post("/v1/thread/like", async (req, res) => {
 // Top contributors api
 router.get("/v1/users/top", async (req, res) => {
   try {
-    const users = await User.find({}, "_id username likesReceived").sort({
-      likesReceived: -1,
-    });
+    const cachedData = await redis.get("topContributors");
 
-    res.status(200).send(users);
+    if (cachedData) {
+      const data = JSON.parse(cachedData);
+      res.status(200).send(data);
+    } else {
+      const data = await User.find({}, "_id username likesReceived").sort({
+        likesReceived: -1,
+      });
+      redis.setex("topContributors", 600, JSON.stringify(data));
+      res.status(200).send(data);
+    }
   } catch (err) {
     res.status(500).send({ message: "Something went wrong" });
     console.log("top contributors", err);

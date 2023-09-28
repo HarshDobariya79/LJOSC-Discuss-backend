@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { formatDate } = require("../utils");
+const { formatDate } = require("../utils/helpers");
 const User = require("../models/user");
 
 router.get("/", async (req, res) => {
