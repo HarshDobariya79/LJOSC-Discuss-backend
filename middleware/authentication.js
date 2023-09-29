@@ -16,7 +16,7 @@ const authenticate = async (req, res, next) => {
 
     const decoded = jwt.verify(token, ACCESS_TOKEN_SIGN_KEY);
 
-    if (decoded.exp <= Date.now() / ACCESS_TOKEN_CLOCK_TOLERANCE) {
+    if (decoded.exp <= Math.floor(Date.now() / 1000) - ACCESS_TOKEN_CLOCK_TOLERANCE) {
       return res.status(401).json({ error: "Access token has expired" });
     }
 

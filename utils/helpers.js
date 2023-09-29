@@ -1,3 +1,4 @@
+// return date object to string as dd/mm/yyyy
 const formatDate = (date) => {
   const day = date.getDate();
   const month = date.getMonth() + 1; // Months are zero-indexed, so add 1
@@ -11,6 +12,7 @@ const formatDate = (date) => {
   return formattedDate;
 };
 
+// return date object to string as dd/mm/yyyy - hh:mm
 const formatDateTime = (date) => {
   if (!(date instanceof Date) || isNaN(date)) {
     return "Invalid Date";

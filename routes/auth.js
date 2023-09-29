@@ -8,6 +8,7 @@ const ACCESS_TOKEN_SIGN_KEY = process.env.ACCESS_TOKEN_SIGN_KEY;
 const REFRESH_TOKEN_SIGN_KEY = process.env.REFRESH_TOKEN_SIGN_KEY;
 const REFRESH_TOKEN_CLOCK_TOLERANCE = 5000; // 5 seconds
 
+// Sign up route
 router.post("/v1/signup", async (req, res) => {
   try {
     const { username, email, password } = req.body;
@@ -31,6 +32,7 @@ router.post("/v1/signup", async (req, res) => {
   }
 });
 
+// Login route
 router.post("/v1/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -71,6 +73,8 @@ router.post("/v1/login", async (req, res) => {
   }
 });
 
+
+// JWT renewal route
 router.post("/v1/refresh-token", (req, res) => {
   const refreshToken = req.body.refreshToken;
 
@@ -81,14 +85,15 @@ router.post("/v1/refresh-token", (req, res) => {
   try {
     const decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SIGN_KEY);
 
-    if (decoded.exp <= Date.now() / REFRESH_TOKEN_CLOCK_TOLERANCE) {
+    // Accept tokens if expired recently
+    if (decoded.exp <= Math.floor(Date.now() / 1000) - REFRESH_TOKEN_CLOCK_TOLERANCE) {
       return res.status(401).json({ error: 'Refresh token has expired' });
     }
 
     const accessToken = jwt.sign(
       { userId: decoded.userId, email: decoded.email },
       ACCESS_TOKEN_SIGN_KEY,
-      { expiresIn: "1h" }
+      { expiresIn: "15m" }
     );
 
     res.status(200).json({ accessToken });

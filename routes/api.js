@@ -24,7 +24,6 @@ router.post("/v1/thread", async (req, res) => {
     };
 
     // delete all cached threads lists
-
     let cursor = "0";
     let keysToDelete = [];
 
@@ -58,6 +57,7 @@ router.get("/v1/thread/:id", async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // aggregate pipeline
     const pipeline = [
       {
         $match: {
@@ -160,7 +160,6 @@ router.get("/v1/thread/:id", async (req, res) => {
                 },
                 content: "$$reply.content",
                 date: "$$reply.date",
-                // Add other fields from the reply object as needed
               },
             },
           },
@@ -196,6 +195,8 @@ router.get("/v1/thread/:id", async (req, res) => {
         return;
       }
     }
+
+    // Update thead's reach and views
     const trackRecord = await Thread.findByIdAndUpdate(
       req.params.id,
       {
@@ -209,6 +210,7 @@ router.get("/v1/thread/:id", async (req, res) => {
       { new: true }
     );
 
+    // Add thread to user's visited threads list
     const userRecordUpdate = await User.findByIdAndUpdate(user._id, {
       $addToSet: {
         visitedThreads: req.params.id,
@@ -250,6 +252,8 @@ router.get("/v1/thread", async (req, res) => {
     // } else {
     //   filterDate = undefined;
     // }
+
+    // aggregate pipeline
     const pipeline = additionalFilter.concat([
       // {
       //   $match: {
@@ -305,11 +309,14 @@ router.get("/v1/thread", async (req, res) => {
       { $limit: parseInt(limit) },
     ]);
 
+    // fetch cached data from redis if available
     const cachedData = await redis.get(
       `threads?page=${page}&limit=${limit}&filter=${filter}`
     );
 
+    // check for cached data
     if (cachedData) {
+      // Add other fields from the reply object as needed
       const data = JSON.parse(cachedData);
       res.status(200).send(data);
     } else {
@@ -321,6 +328,8 @@ router.get("/v1/thread", async (req, res) => {
         };
       });
       res.status(200).send(data);
+
+      // set result in redis cache
       await redis.setex(
         `threads?page=${page}&limit=${limit}&filter=${filter}`,
         10,
@@ -390,6 +399,7 @@ router.post("/v1/thread/like", async (req, res) => {
 
     const oldRecordStatus = response.likes.indexOf(user._id) !== -1;
 
+    // update author's likes received count
     if (like === true && !oldRecordStatus) {
       await User.findByIdAndUpdate(response.author, {
         $inc: { likesReceived: 1 },
@@ -412,8 +422,10 @@ router.post("/v1/thread/like", async (req, res) => {
 // Top contributors api
 router.get("/v1/users/top", async (req, res) => {
   try {
+    // fetch cached data from redis if available
     const cachedData = await redis.get("topContributors");
 
+    // check for cached data
     if (cachedData) {
       const data = JSON.parse(cachedData);
       res.status(200).send(data);
@@ -421,7 +433,9 @@ router.get("/v1/users/top", async (req, res) => {
       const data = await User.find({}, "_id username likesReceived").sort({
         likesReceived: -1,
       });
-      redis.setex("topContributors", 600, JSON.stringify(data));
+
+      // cache the result in redis
+      await redis.setex("topContributors", 600, JSON.stringify(data));
       res.status(200).send(data);
     }
   } catch (err) {
