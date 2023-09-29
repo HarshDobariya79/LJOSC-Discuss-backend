@@ -8,6 +8,7 @@ const authRouter = require("./routes/auth");
 const indexRoute = require("./routes/index");
 const apiRoute = require("./routes/api");
 const cors = require("cors")
+const rateLimit = require('express-rate-limit');
 
 const SERVER_PORT = process.env.SERVER_PORT || 8080;
 
@@ -23,6 +24,17 @@ const corsOptions = {
   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   credentials: true,
 };
+
+// rate limit api requests based on ip address
+const limiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute window
+  max: 100, // 100 requests per minute per IP address
+  keyGenerator: (req) => {
+    return req.ip; // Use IP address as the key
+  },
+});
+
+app.use(limiter);
 
 app.use(cors(corsOptions));
 
