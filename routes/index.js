@@ -3,10 +3,12 @@ const router = express.Router();
 const { formatDate } = require("../utils/helpers");
 const User = require("../models/user");
 
+// Home page route
 router.get("/", async (req, res) => {
   res.send({ message: "Home page" });
 });
 
+// Route to update user visitedDays
 router.get("/ping", async (req, res) => {
   const currentDate = new Date();
   currentDate.setHours(0, 0, 0, 0);

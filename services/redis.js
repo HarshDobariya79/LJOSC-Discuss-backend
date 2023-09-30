@@ -7,6 +7,7 @@ const redis = new Redis({
   port: REDIS_PORT,
 });
 
+// Event handler for successful connection
 redis.on("connect", () => {
   console.log("Connected to Redis server");
 });

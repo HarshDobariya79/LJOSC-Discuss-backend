@@ -10,7 +10,7 @@ const apiRoute = require("./routes/api");
 const cors = require("cors")
 const rateLimit = require('express-rate-limit');
 
-const SERVER_PORT = process.env.SERVER_PORT || 8080;
+const SERVER_PORT = process.env.SERVER_PORT || 8080; // take default port as 8080 if not specified
 
 mongoose.connect(process.env.DATABASE_URL);
 const db = mongoose.connection;
@@ -38,11 +38,15 @@ app.use(limiter);
 
 app.use(cors(corsOptions));
 
+// Keep /auth unprotected
 app.use("/auth", authRouter);
+
+// protect rest of the routes with authMiddleware
 app.use("/", authMiddleware);
 app.use('/', indexRoute)
 app.use("/api", apiRoute);
 
+// start listening on the server
 app.listen(SERVER_PORT, () =>
   console.log(`server listening on http://localhost:${SERVER_PORT}`)
 );
